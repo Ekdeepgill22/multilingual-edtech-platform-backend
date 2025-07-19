@@ -39,7 +39,7 @@ Before you begin, ensure you have the following installed:
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/Ekdeepgill22/multilingual-edtech-platform.git
+git clone https://github.com/Ekdeepgill22/multilingual-edtech-platform-backend.git
 cd multilingual-edtech-platform
 ```
 
@@ -445,3 +445,5 @@ For support and questions:
 ---
 
 **Note**: Make sure to replace placeholder values in the `.env` file with your actual API keys and configuration before running the application.
+
+
