@@ -51,7 +51,8 @@ router.post('/', upload.single('audio'), speechController.speechToText);
 router.post('/synthesize', validateTTSRequest, speechController.textToSpeech);
 
 // POST /api/speech/analyze - Analyze pronunciation and fluency
-router.post('/analyze', upload.single('audio'), speechController.analyzeSpeech);
+router.post('/analyze', upload.single('audio'), speechController.evaluatePronunciation);
+
 
 // Error handling middleware for multer
 router.use((error, req, res, next) => {

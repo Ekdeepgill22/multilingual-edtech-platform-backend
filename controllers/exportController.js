@@ -1,4 +1,4 @@
-const exportService = require('../services/exportService');
+const exportService = require('../services/docExportService');
 const { validationResult } = require('express-validator');
 
 /**
@@ -483,6 +483,36 @@ const getExportStats = async (req, res) => {
   }
 };
 
+const exportData = async (req, res) => {
+  // TODO: Implement export data logic
+  res.status(501).json({ message: 'Not Implemented' });
+};
+
+const exportSession = async (req, res) => {
+  // TODO: Implement export session logic
+  res.status(501).json({ message: 'Not Implemented' });
+};
+
+const exportSpeechReport = async (req, res) => {
+  // TODO: Implement export speech report logic
+  res.status(501).json({ message: 'Not Implemented' });
+};
+
+const exportProgressReport = async (req, res) => {
+  // TODO: Implement export progress report logic
+  res.status(501).json({ message: 'Not Implemented' });
+};
+
+const getExportTemplates = async (req, res) => {
+  // TODO: Implement get export templates logic
+  res.status(501).json({ message: 'Not Implemented' });
+};
+
+const exportBulk = async (req, res) => {
+  // TODO: Implement export bulk logic
+  res.status(501).json({ message: 'Not Implemented' });
+};
+
 module.exports = {
   exportToDocx,
   exportToPdf,
@@ -490,5 +520,11 @@ module.exports = {
   exportGrammarReport,
   exportPronunciationReport,
   getExportHistory,
-  getExportStats
+  getExportStats,
+  exportData,
+  exportSession,
+  exportSpeechReport,
+  exportProgressReport,
+  getExportTemplates,
+  exportBulk
 };

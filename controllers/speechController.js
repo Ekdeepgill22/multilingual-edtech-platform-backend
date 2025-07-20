@@ -366,9 +366,15 @@ const deletePronunciationRecord = async (req, res) => {
   }
 };
 
+const textToSpeech = async (req, res) => {
+  // TODO: Implement text-to-speech logic
+  res.status(501).json({ message: 'Not Implemented' });
+};
+
 module.exports = {
   evaluatePronunciation,
   speechToText,
+  textToSpeech,
   generatePracticeExercises,
   getPronunciationHistory,
   getPronunciationStats,
