@@ -6,27 +6,28 @@ const router = express.Router();
 // Validation middleware for grammar check requests
 const validateGrammarRequest = (req, res, next) => {
   const { text, language } = req.body;
-  
+
   if (!text || text.trim().length === 0) {
     return res.status(400).json({
       success: false,
       message: 'Text is required for grammar checking.'
     });
   }
-  
-  const supportedLanguages = ['english', 'hindi', 'punjabi'];
+
+  // Use standard language codes: 'en' for English, 'hi' for Hindi, 'pa' for Punjabi
+  const supportedLanguages = ['en', 'hi', 'pa'];
   if (language && !supportedLanguages.includes(language.toLowerCase())) {
     return res.status(400).json({
       success: false,
-      message: 'Supported languages are: English, Hindi, Punjabi.'
+      message: 'Supported languages are: English (en), Hindi (hi), Punjabi (pa).'
     });
   }
-  
-  // Set default language to English if not provided
+
+  // Set default language to English (code 'en') if not provided
   if (!language) {
-    req.body.language = 'english';
+    req.body.language = 'en';
   }
-  
+
   next();
 };
 

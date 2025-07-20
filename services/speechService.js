@@ -14,7 +14,7 @@ class SpeechService {
     // Language codes for Hindi, Punjabi, and English
     this.languageCodes = {
       hindi: 'hi-IN',
-      punjabi: 'pa-IN', 
+      punjabi: 'pa-IN',
       english: 'en-IN'
     };
 
@@ -40,7 +40,7 @@ class SpeechService {
   async transcribeAudio(audioInput, options = {}) {
     try {
       let audioBytes;
-      
+
       // Handle different input types
       if (typeof audioInput === 'string') {
         // File path
@@ -68,17 +68,17 @@ class SpeechService {
 
       console.log('Starting audio transcription...');
       const [response] = await this.speechClient.recognize(request);
-      
+
       const transcription = response.results
         .map(result => result.alternatives[0])
         .filter(alternative => alternative.transcript)
         .map(alternative => ({
           transcript: alternative.transcript,
-          confidence: alternative.confidence,
+          confidence: alternative.confidence ?? null,
           words: alternative.words?.map(word => ({
             word: word.word,
-            startTime: word.startTime?.seconds || 0,
-            endTime: word.endTime?.seconds || 0,
+            startTime: (word.startTime?.seconds || 0) + (word.startTime?.nanos || 0) / 1e9,
+            endTime: (word.endTime?.seconds || 0) + (word.endTime?.nanos || 0) / 1e9,
             confidence: word.confidence
           })) || []
         }));
@@ -126,20 +126,20 @@ class SpeechService {
 
       console.log('Starting long audio transcription...');
       const [operation] = await this.speechClient.longRunningRecognize(request);
-      
+
       // Wait for operation to complete
       const [response] = await operation.promise();
-      
+
       const transcription = response.results
         .map(result => result.alternatives[0])
         .filter(alternative => alternative.transcript)
         .map(alternative => ({
           transcript: alternative.transcript,
-          confidence: alternative.confidence,
+          confidence: alternative.confidence ?? null,
           words: alternative.words?.map(word => ({
             word: word.word,
-            startTime: word.startTime?.seconds || 0,
-            endTime: word.endTime?.seconds || 0,
+            startTime: (word.startTime?.seconds || 0) + (word.startTime?.nanos || 0) / 1e9,
+            endTime: (word.endTime?.seconds || 0) + (word.endTime?.nanos || 0) / 1e9,
             confidence: word.confidence
           })) || []
         }));
@@ -184,7 +184,7 @@ class SpeechService {
             const transcript = data.results[0].alternatives[0].transcript;
             const confidence = data.results[0].alternatives[0].confidence;
             const isFinal = data.results[0].isFinal;
-            
+
             // Emit transcription events
             options.onTranscript && options.onTranscript({
               transcript,
@@ -238,7 +238,7 @@ class SpeechService {
     // Simple language detection based on character patterns
     const hindiPattern = /[\u0900-\u097F]/;
     const punjabiPattern = /[\u0A00-\u0A7F]/;
-    
+
     if (hindiPattern.test(transcript)) return 'hindi';
     if (punjabiPattern.test(transcript)) return 'punjabi';
     return 'english';
@@ -270,24 +270,29 @@ class SpeechService {
     try {
       const path = require('path');
       const stats = await fs.stat(filePath);
-      
+
       // Check file size (max 100MB for regular transcription)
       if (stats.size > 100 * 1024 * 1024) {
         throw new Error('Audio file too large. Use GCS URI for files over 100MB.');
       }
-      
+
       // Check supported formats
       const ext = path.extname(filePath).toLowerCase();
       const supportedFormats = ['.wav', '.mp3', '.flac', '.webm', '.ogg'];
       if (!supportedFormats.includes(ext)) {
         throw new Error(`Unsupported audio format. Supported: ${supportedFormats.join(', ')}`);
       }
-      
+
       return true;
     } catch (error) {
       throw new Error(`Audio validation failed: ${error.message}`);
     }
   }
+  
+  async saveTranscriptToFile(transcriptObj, outputPath) {
+    await fs.writeFile(outputPath, JSON.stringify(transcriptObj, null, 2));
+  }
 }
+
 
 module.exports = new SpeechService();

@@ -12,17 +12,25 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
   fileFilter: (req, file, cb) => {
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
+    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(new Error('Only JPEG, PNG, JPG, and WebP images are allowed'), false);
     }
   }
 });
 
-// POST /api/ocr - Extract text from uploaded image
+/**
+ * @route   POST /api/ocr
+ * @desc    Extract text from uploaded image
+ * @body    multipart/form-data { image: File, language: 'en' | 'hi' | 'pa' }
+ */
+// Existing route
 router.post('/', upload.single('image'), ocrController.extractText);
+
+// ✅ New route with preprocessing
+router.post('/preprocess', upload.single('image'), ocrController.extractTextWithPreprocessing);
 
 // Error handling middleware for multer
 router.use((error, req, res, next) => {
@@ -34,12 +42,17 @@ router.use((error, req, res, next) => {
       });
     }
   }
-  if (error.message === 'Only image files are allowed') {
+  if (
+    error.message === 'Only JPEG, PNG, JPG, and WebP images are allowed' ||
+    error.message === 'Only image files are allowed'
+  ) {
     return res.status(400).json({
       success: false,
-      message: 'Only image files are allowed for OCR processing.'
+      message: 'Only JPEG, PNG, JPG, and WebP images are allowed for OCR processing.'
     });
   }
+
+  // Default error pass-through
   next(error);
 });
 

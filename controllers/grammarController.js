@@ -7,43 +7,40 @@ const { validationResult } = require('express-validator');
  */
 const checkGrammar = async (req, res) => {
   try {
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    // Validate input from express-validator
+    const validationErrors = validationResult(req);
+    if (!validationErrors.isEmpty()) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: errors.array()
+        errors: validationErrors.array()
       });
     }
 
     const { text, language = 'en', checkType = 'comprehensive' } = req.body;
 
-    // Validate input
     if (!text || text.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Text is required for grammar checking'
+        message: 'Text is required for grammar checking.'
       });
     }
 
     if (text.length > 5000) {
       return res.status(400).json({
         success: false,
-        message: 'Text exceeds maximum length of 5000 characters'
+        message: 'Text exceeds maximum length of 5000 characters.'
       });
     }
 
-    // Validate supported languages
     const supportedLanguages = ['en', 'hi', 'pa'];
-    if (!supportedLanguages.includes(language)) {
+    if (!supportedLanguages.includes(language.toLowerCase())) {
       return res.status(400).json({
         success: false,
         message: 'Unsupported language. Supported languages: English (en), Hindi (hi), Punjabi (pa)'
       });
     }
 
-    // Validate check types
     const supportedCheckTypes = ['comprehensive', 'spelling', 'grammar', 'punctuation', 'style'];
     if (!supportedCheckTypes.includes(checkType)) {
       return res.status(400).json({
@@ -52,66 +49,92 @@ const checkGrammar = async (req, res) => {
       });
     }
 
-    // Perform grammar check using Gemini API
-    const result = await grammarService.checkGrammar(text, language, checkType);
+    // Perform grammar check
+    const languageMap = {
+      en: 'english',
+      hi: 'hindi',
+      pa: 'punjabi'
+    };
 
-    res.status(200).json({
+    const fullLang = languageMap[language.toLowerCase()];
+    if (!fullLang) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unsupported language. Supported languages: English (en), Hindi (hi), Punjabi (pa)'
+      });
+    }
+
+    const result = await grammarService.correctGrammar(text, fullLang, checkType);
+    // console.log('Grammar correction result:', result);
+
+    const errors = Array.isArray(result.errors)
+      ? result.errors
+      : Array.isArray(result.changes)
+        ? result.changes
+        : [];
+
+    const suggestions = Array.isArray(result.suggestions)
+      ? result.suggestions
+      : [];
+
+    const overallScore = result.overallScore || result.confidence || 0;
+
+    return res.status(200).json({
       success: true,
-      message: 'Grammar check completed successfully',
+      message: 'Grammar check completed successfully.',
       data: {
-        originalText: text,
-        correctedText: result.correctedText,
-        errors: result.errors,
-        suggestions: result.suggestions,
-        overallScore: result.overallScore,
-        language: language,
-        checkType: checkType,
+        originalText: result.original || text,
+        correctedText: result.corrected || result.correctedText || '',
+        errors,
+        suggestions,
+        overallScore,
+        language,
+        checkType,
         statistics: {
-          totalErrors: result.errors.length,
-          errorsByType: result.errorsByType,
-          readabilityScore: result.readabilityScore,
-          wordCount: result.wordCount
+          totalErrors: errors.length,
+          readabilityScore: result.readabilityScore || 0,
+          wordCount: result.wordCount || 0
         },
-        processingTime: result.processingTime
+        processingTime: result.processingTime || 0
       }
     });
-
   } catch (error) {
     console.error('Grammar check error:', error);
-    
-    if (error.message.includes('API quota exceeded')) {
+
+    if (error.message?.toLowerCase().includes('unsupported language')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Language not supported by grammar service.'
+      });
+    }
+
+    if (error.message?.toLowerCase().includes('quota')) {
       return res.status(429).json({
         success: false,
         message: 'Grammar check quota exceeded. Please try again later.'
       });
     }
 
-    if (error.message.includes('language not supported')) {
-      return res.status(400).json({
-        success: false,
-        message: 'Language not supported by grammar service'
-      });
-    }
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: 'Internal server error during grammar check',
+      message: 'Internal server error during grammar check.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
+
 
 /**
  * Get detailed grammar suggestions and explanations
  */
 const getGrammarSuggestions = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    const validationErrors  = validationResult(req);
+    if (!validationErrors.isEmpty()) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: errors.array()
+        errors: validationErrors.array()
       });
     }
 
@@ -153,12 +176,12 @@ const getGrammarSuggestions = async (req, res) => {
  */
 const batchGrammarCheck = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    const validationErrors  = validationResult(req);
+    if (!validationErrors.isEmpty()) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: errors.array()
+        errors: validationErrors.array()
       });
     }
 

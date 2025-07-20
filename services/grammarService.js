@@ -6,7 +6,15 @@ class GrammarService {
     // Initialize Gemini AI client
     // Set GEMINI_API_KEY in environment variables
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'YOUR_GEMINI_API_KEY');
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+    this.model = this.genAI.getGenerativeModel({
+      model: 'models/gemini-2.5-pro', // correct model name for v1
+      generationConfig: {
+        temperature: 0.7,
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 2048,
+      }
+    });
 
     // Language-specific prompts
     this.prompts = {
@@ -52,19 +60,15 @@ class GrammarService {
       }
 
       const prompt = this.buildGrammarPrompt(text, normalizedLanguage, options);
-      
+
       console.log(`Correcting grammar for ${language} text...`);
-      
-      const result = await this.model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          ...this.generationConfig,
-          ...options.generationConfig
-        }
-      });
+
+      const result = await this.model.generateContent([{ text: prompt }]);
 
       const response = await result.response;
       const correctedText = response.text();
+
+      console.log("🔍 Gemini Raw Output:\n", response);
 
       // Parse the structured response
       const parsedResult = this.parseGrammarResponse(correctedText, text);
@@ -100,13 +104,10 @@ class GrammarService {
 
       const normalizedLanguage = language.toLowerCase();
       const prompt = this.buildStylePrompt(text, normalizedLanguage, options);
-      
+
       console.log(`Improving style for ${language} text...`);
-      
-      const result = await this.model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: this.generationConfig
-      });
+
+      const result = await this.model.generateContent([{ text: prompt }]);
 
       const response = await result.response;
       const improvedText = response.text();
@@ -176,10 +177,7 @@ class GrammarService {
         CHANGES MADE: [list of corrections]
       `;
 
-      const result = await this.model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: this.generationConfig
-      });
+      const result = await this.model.generateContent([{ text: prompt }]);
 
       const response = await result.response;
       const responseText = response.text();
@@ -207,11 +205,11 @@ class GrammarService {
     const basePrompt = this.prompts[language].grammar;
     const contextPrompt = options.context ? `Context: ${options.context}\n` : '';
     const formatInstructions = `
-    Please respond in this format:
-    CORRECTED: [corrected text]
-    CHANGES: [list of changes made]
-    SUGGESTIONS: [additional suggestions if any]
-    `;
+⚠️ Respond in this strict format:
+CORRECTED: [only the corrected version here, do not add extra text]
+CHANGES: [list each grammar or word change clearly, one per line]
+SUGGESTIONS: [formal alternatives, writing tips, or enhancements]
+`;
 
     return `${contextPrompt}${basePrompt}\n\nText: "${text}"\n${formatInstructions}`;
   }
@@ -224,7 +222,7 @@ class GrammarService {
     const basePrompt = this.prompts[language].style;
     const styleType = options.styleType || 'general';
     const audiencePrompt = options.audience ? `Target audience: ${options.audience}\n` : '';
-    
+
     return `${audiencePrompt}${basePrompt}\nStyle focus: ${styleType}\n\nText: "${text}"`;
   }
 
@@ -233,12 +231,14 @@ class GrammarService {
    * @private
    */
   parseGrammarResponse(response, originalText) {
-    const correctedMatch = response.match(/CORRECTED:\s*(.*?)(?=CHANGES:|$)/s);
-    const changesMatch = response.match(/CHANGES:\s*(.*?)(?=SUGGESTIONS:|$)/s);
+    const correctedMatch = response.match(/CORRECTED:\s*(.*?)(?=\n[A-Z]+:|$)/s);
+    const changesMatch = response.match(/CHANGES:\s*(.*?)(?=\n[A-Z]+:|$)/s);
     const suggestionsMatch = response.match(/SUGGESTIONS:\s*(.*)/s);
 
+    const fallbackTrim = response.replace(/^(CORRECTED:|CHANGES:|SUGGESTIONS:)/gm, '').trim();
+
     return {
-      corrected: correctedMatch ? correctedMatch[1].trim() : response.trim(),
+      corrected: correctedMatch?.[1]?.trim() || fallbackTrim,
       changes: changesMatch ? changesMatch[1].trim().split('\n').filter(c => c.trim()) : [],
       suggestions: suggestionsMatch ? suggestionsMatch[1].trim().split('\n').filter(s => s.trim()) : []
     };
@@ -251,7 +251,7 @@ class GrammarService {
   calculateConfidence(original, corrected) {
     const similarity = this.calculateSimilarity(original, corrected);
     const lengthDifference = Math.abs(original.length - corrected.length) / Math.max(original.length, corrected.length);
-    
+
     // Higher similarity and lower length difference = higher confidence
     return Math.max(0, Math.min(1, similarity - lengthDifference * 0.5));
   }
@@ -264,7 +264,7 @@ class GrammarService {
     const words1 = text1.toLowerCase().split(/\s+/);
     const words2 = text2.toLowerCase().split(/\s+/);
     const intersection = words1.filter(word => words2.includes(word));
-    
+
     return intersection.length / Math.max(words1.length, words2.length);
   }
 
