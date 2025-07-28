@@ -1,22 +1,17 @@
-const exportService = require('../services/docExportService');
+const DocExportService = require('../services/docExportService');
+const exportService = new DocExportService(); 
 const { validationResult } = require('express-validator');
 
 /**
  * Convert extracted text to downloadable .docx document
  * Supports formatted documents with multilingual content
- */
-const exportToDocx = async (req, res) => {
-  try {
-    // Validate request
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
 
+/**
+ * Export plain or multilingual text to DOCX
+ * @route POST /api/export/docx
+ */
+exports.exportToDocx = async (req, res) => {
+  try {
     const {
       text,
       title = 'Extracted Text Document',
@@ -25,7 +20,7 @@ const exportToDocx = async (req, res) => {
       metadata = {}
     } = req.body;
 
-    // Validate input
+    // Input validation
     if (!text || text.trim().length === 0) {
       return res.status(400).json({
         success: false,
@@ -40,22 +35,27 @@ const exportToDocx = async (req, res) => {
       });
     }
 
-    // Validate supported languages
-    const supportedLanguages = ['en', 'hi', 'pa'];
-    if (!supportedLanguages.includes(language)) {
+    // Validate supported languages (you can map them if needed)
+    const supportedLanguages = {
+      en: 'english',
+      hi: 'hindi',
+      pa: 'punjabi'
+    };
+
+    const mappedLanguage = supportedLanguages[language];
+    if (!mappedLanguage) {
       return res.status(400).json({
         success: false,
         message: 'Unsupported language. Supported languages: English (en), Hindi (hi), Punjabi (pa)'
       });
     }
 
-    const { userId } = req.user; // Assuming user is attached via auth middleware
+    const { userId } = req.user || {};
 
     // Generate DOCX document
-    const docBuffer = await exportService.generateDocxDocument({
-      text,
+    const docResult = await exportService.generateDocument(text, {
       title,
-      language,
+      language: mappedLanguage,
       formatting,
       metadata: {
         ...metadata,
@@ -65,28 +65,26 @@ const exportToDocx = async (req, res) => {
       }
     });
 
-    // Set appropriate headers for file download
-    const filename = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${Date.now()}.docx`;
-    
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', docBuffer.length);
+    // Set headers for file download
+    res.setHeader('Content-Type', docResult.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${docResult.filename}"`);
+    res.setHeader('Content-Length', docResult.size);
     res.setHeader('Cache-Control', 'no-cache');
 
     // Log export activity
-    await exportService.logExportActivity({
+    await exportService.logExportActivity?.({
       userId,
       exportType: 'docx',
-      language,
+      language: mappedLanguage,
       contentLength: text.length,
-      filename
+      filename: docResult.filename
     });
 
-    res.status(200).send(docBuffer);
+    res.status(200).send(docResult.buffer);
 
   } catch (error) {
     console.error('DOCX export error:', error);
-    
+
     if (error.message.includes('invalid formatting')) {
       return res.status(400).json({
         success: false,
@@ -108,6 +106,7 @@ const exportToDocx = async (req, res) => {
     });
   }
 };
+
 
 /**
  * Export to PDF format

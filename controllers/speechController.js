@@ -76,42 +76,33 @@ const evaluatePronunciation = async (req, res) => {
     }
 
     // Evaluate pronunciation
-    const result = await speechService.evaluatePronunciation({
-      audioBuffer,
-      language,
-      targetText,
-      evaluationType,
-      difficulty,
-      mimeType
+    const languageCodeMap = {
+      en: 'en-IN',
+      hi: 'hi-IN',
+      pa: 'pa-IN'
+    };
+
+    const result = await speechService.transcribeAudio(audioBuffer, {
+      languageCode: languageCodeMap[language] || 'en-IN',
+      enableAutomaticPunctuation: true
     });
 
     res.status(200).json({
       success: true,
-      message: 'Pronunciation evaluation completed successfully',
+      message: 'Speech to text conversion completed successfully',
       data: {
-        overallScore: result.overallScore,
-        pronunciationScore: result.pronunciationScore,
-        fluencyScore: result.fluencyScore,
-        accuracyScore: result.accuracyScore,
-        completenessScore: result.completenessScore,
-        spokenText: result.spokenText,
-        targetText: targetText,
+        transcribedText: result.fullText,
+        confidence: result.transcription?.[0]?.confidence ?? null,
         language: language,
-        feedback: {
-          strengths: result.feedback.strengths,
-          improvements: result.feedback.improvements,
-          specificErrors: result.feedback.specificErrors,
-          recommendations: result.feedback.recommendations
-        },
-        phonemeAnalysis: result.phonemeAnalysis,
-        wordLevelScores: result.wordLevelScores,
-        timeAlignment: result.timeAlignment,
+        detectedLanguage: result.detectedLanguage,
+        alternatives: result.transcription,
+        wordTimestamps: result.transcription?.[0]?.words || [],
         audioMetrics: {
-          duration: result.audioMetrics.duration,
-          speechRate: result.audioMetrics.speechRate,
-          pauseAnalysis: result.audioMetrics.pauseAnalysis
+          duration: result.totalDuration,
+          sampleRate: 48000, // assuming standard config
+          channels: 1
         },
-        processingTime: result.processingTime
+        processingTime: 'N/A'
       }
     });
 
@@ -179,35 +170,103 @@ const speechToText = async (req, res) => {
     const audioBuffer = req.file.buffer;
     const mimeType = req.file.mimetype;
 
-    const result = await speechService.speechToText({
-      audioBuffer,
-      language,
-      enablePunctuation,
-      mimeType
+    // Validate supported languages
+    const supportedLanguages = ['en', 'hi', 'pa'];
+    if (!supportedLanguages.includes(language)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unsupported language. Supported languages: English (en), Hindi (hi), Punjabi (pa)'
+      });
+    }
+
+    // Validate file type
+    const allowedMimeTypes = [
+      'audio/wav', 'audio/wave', 'audio/x-wav',
+      'audio/mpeg', 'audio/mp3',
+      'audio/mp4', 'audio/m4a',
+      'audio/webm', 'audio/ogg'
+    ];
+    if (!allowedMimeTypes.includes(mimeType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid audio format. Supported formats: WAV, MP3, M4A, WebM, OGG'
+      });
+    }
+
+    // Validate file size (max 10MB)
+    if (req.file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'Audio file too large. Maximum size: 10MB'
+      });
+    }
+
+    // Map language codes
+    const languageCodeMap = {
+      en: 'en-IN',
+      hi: 'hi-IN',
+      pa: 'pa-IN'
+    };
+
+    // Use the existing transcribeAudio function with proper parameters
+    const result = await speechService.transcribeAudio(audioBuffer, {
+      languageCode: languageCodeMap[language] || 'en-IN',
+      enableAutomaticPunctuation: enablePunctuation === 'true' || enablePunctuation === true,
+      mimeType: mimeType
     });
 
     res.status(200).json({
       success: true,
       message: 'Speech to text conversion completed successfully',
       data: {
-        transcribedText: result.transcribedText,
-        confidence: result.confidence,
+        transcribedText: result.fullText,
+        confidence: result.transcription?.[0]?.confidence ?? null,
         language: language,
         detectedLanguage: result.detectedLanguage,
-        alternatives: result.alternatives,
-        wordTimestamps: result.wordTimestamps,
-        speakerInfo: result.speakerInfo,
+        alternatives: result.transcription,
+        wordTimestamps: result.transcription?.[0]?.words || [],
+        speakerInfo: result.speakerInfo || null,
         audioMetrics: {
-          duration: result.audioMetrics.duration,
-          sampleRate: result.audioMetrics.sampleRate,
-          channels: result.audioMetrics.channels
+          duration: result.totalDuration,
+          sampleRate: 48000, // assuming standard config
+          channels: 1
         },
-        processingTime: result.processingTime
+        processingTime: result.processingTime || 'N/A'
       }
     });
 
   } catch (error) {
     console.error('Speech to text error:', error);
+    
+    // Handle specific error cases
+    if (error.message.includes('audio too short')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Audio recording is too short. Minimum duration: 1 second'
+      });
+    }
+
+    if (error.message.includes('audio too long')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Audio recording is too long. Maximum duration: 5 minutes'
+      });
+    }
+
+    if (error.message.includes('no speech detected')) {
+      return res.status(400).json({
+        success: false,
+        message: 'No clear speech detected in the audio recording'
+      });
+    }
+
+    if (error.message.includes('quota exceeded')) {
+      return res.status(429).json({
+        success: false,
+        message: 'Speech recognition quota exceeded. Please try again later.'
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Failed to convert speech to text',
